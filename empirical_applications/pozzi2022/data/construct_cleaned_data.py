@@ -29,7 +29,7 @@ def main():
     # Calculate inflation from CPI
     df['inflation'] = df.groupby('country')['cpi'].pct_change()
     
-    # Calculate real returns using Fisher equation
+    # Calculate real returns
     df['r_eq_tr'] = (1 + df['eq_tr']) / (1 + df['inflation']) - 1
     df['r_housing_tr'] = (1 + df['housing_tr']) / (1 + df['inflation']) - 1
     

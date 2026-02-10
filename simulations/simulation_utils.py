@@ -1,5 +1,4 @@
 import numpy as np
-from numpy import random as rnd
 from scipy.special import gamma
 import pandas as pd
 import seaborn as sns
@@ -14,6 +13,7 @@ import platform
 import sys
 import multiprocessing
 from datetime import datetime
+from scipy.signal import savgol_filter
 
 from config import *
 
@@ -459,7 +459,218 @@ def generate_figures(
         plt.tight_layout()
         
         fig_outer_value = int(outer_value * 100) if outer_var != 'mu2' else outer_value
-        fig_path = os.path.join(OUTPUT_DIR, f'exp{experiment}_kz{kz}_{outer_var}{fig_outer_value}_{simulation_type}.pdf')
+        fig_path = os.path.join(
+            OUTPUT_DIR,
+            f'exp{experiment}_kz{kz}_{outer_var}{fig_outer_value}_{simulation_type}.pdf'
+        )
+        
+        plt.savefig(fig_path, format='pdf', bbox_inches='tight')
+        print(f"Saved: {fig_path}")
+        
+        plt.close()
+
+    print("\nAll figures generated!")
+
+def generate_figures(
+        df_metrics: pd.DataFrame,
+        simulation_type: str
+    ) -> None:
+    """Generate figures from simulation results"""
+    
+    print("\nGenerating figures...")
+
+    if simulation_type == 'mu2_varying':
+        outer_values_fig = [0.2, 0.5, 0.95]
+        x_var = 'mu2'
+        outer_var = 'rho'
+        x_label = r'$\mu^2$'
+        x_lim = [0, 32]
+        figure_size = (3.15, 2.35)
+        
+    elif simulation_type == 'rho_varying':
+        alpha_values_exp1 = [0.5, 1, 2]
+        alpha_values_exp2 = [0.05, 0.1, 0.2]
+        outer_values_fig = alpha_values_exp1 + alpha_values_exp2 
+        x_var = 'rho'
+        outer_var = 'alpha'
+        x_label = r'$\rho$'
+        x_lim = [-1, 1]
+        figure_size = (5.60, 2.7)
+        
+    elif simulation_type == 'power':
+        alpha_values_exp1 = [0.5, 1] 
+        outer_values_fig = alpha_values_exp1
+        x_var = 'omega'
+        outer_var = 'alpha'
+        x_label = r'$\omega$'
+        x_lim = [-1, 1] 
+        figure_size = (3.15, 2.35) 
+
+    param_grid_fig = list(product(EXPERIMENTS, KZ_VALUES, outer_values_fig))
+
+    # Loop over all parameter combinations
+    for experiment, kz, outer_value in param_grid_fig:
+        
+        # For power analysis: ONLY generate exp1, kz=2 figures
+        if simulation_type == 'power':
+            if experiment != 1 or kz != 2:
+                continue
+        
+        alpha_values = [0.5, 1, 2] if experiment == 1 else [0.05, 0.1, 0.2]
+
+        if simulation_type == 'rho_varying':
+            if outer_value not in alpha_values:
+                continue
+            legend_values = [1, 8, 16]
+        elif simulation_type == 'power':
+            if outer_value not in alpha_values:
+                continue
+            legend_values = [0.2, 0.5, 0.95] 
+        else:
+            legend_values = alpha_values
+        
+        # Filter data for this combination
+        filtered_data = df_metrics[
+            (df_metrics["design"] == experiment) & 
+            (df_metrics[outer_var] == outer_value) & 
+            (df_metrics["kz"] == kz)
+        ]
+        
+        if filtered_data.empty:
+            print(f"No data for experiment={experiment}, kz={kz}, {outer_var}={outer_value}")
+            continue
+        
+        # Sort by x_var for smooth curves
+        filtered_data = filtered_data.sort_values(x_var)
+        
+        # Melt data for plotting (same for all simulation types now)
+        filtered_data_melted = filtered_data.melt(
+            id_vars=['mu2', 'rho', 'alpha', 'design', 'kz', 'omega'] if simulation_type == 'power' else ['mu2', 'rho', 'alpha', 'design', 'kz'],
+            value_vars=['J_reject_5', 'KP_reject_5'],
+            var_name='test',
+            value_name='rejection_rate'
+        )
+        
+        filtered_data_melted['test'] = filtered_data_melted['test'].map({
+            'J_reject_5': 'J',
+            'KP_reject_5': 'KP'
+        })
+        
+        # Create combined label for legend with clean formatting
+        if simulation_type == 'mu2_varying':
+            filtered_data_melted['legend_label'] = filtered_data_melted.apply(
+                lambda row: f"{row['test']} (α = {int(row['alpha']) if row['alpha'] == int(row['alpha']) else row['alpha']})", axis=1
+            )
+        elif simulation_type == 'rho_varying':
+            filtered_data_melted['legend_label'] = filtered_data_melted.apply(
+                lambda row: f"{row['test']} (μ² = {int(row['mu2'])})", axis=1
+            )
+        elif simulation_type == 'power':
+            filtered_data_melted['legend_label'] = filtered_data_melted.apply(
+                lambda row: f"{row['test']} (ρ = {row['rho']})", axis=1
+            )
+        
+        # Apply Savitzky-Golay smoothing per series
+        filtered_data_melted = filtered_data_melted.sort_values(x_var)
+        filtered_data_melted['rejection_rate'] = (
+            filtered_data_melted
+            .groupby('legend_label')['rejection_rate']
+            .transform(
+                lambda y: savgol_filter(y, window_length=min(7, len(y) if len(y) % 2 == 1 else len(y) - 1), polyorder=3)
+                if len(y) >= 5 else y
+            )
+        )
+
+        # Style parameters
+        plt.rcParams.update({
+            'font.size': 6,         
+            'axes.labelsize': 6,     
+            'axes.titlesize': 6,   
+            'xtick.labelsize': 6,     
+            'ytick.labelsize': 6,     
+            'legend.fontsize': 6,     
+            'lines.linewidth': 0.5,   
+            'axes.linewidth': 0.5,    
+            'grid.linewidth': 0.5,    
+            'xtick.major.width': 0.8,
+            'ytick.major.width': 0.8, 
+        })
+        
+        plt.figure(figsize=figure_size)
+        
+        # Line style customisation
+        palette = {}
+        dashes = {}
+        hue_order = []
+        
+        for i, legend_val in enumerate(legend_values):
+            if simulation_type == 'mu2_varying':
+                legend_val_label = int(legend_val) if legend_val == int(legend_val) else legend_val
+                label_prefix = 'α = '
+            elif simulation_type == 'rho_varying':
+                legend_val_label = int(legend_val)
+                label_prefix = 'μ² = '
+            elif simulation_type == 'power':
+                legend_val_label = legend_val
+                label_prefix = 'ρ = '
+            
+            palette[f'J ({label_prefix}{legend_val_label})'] = 'blue'
+            palette[f'KP ({label_prefix}{legend_val_label})'] = 'red'
+            
+            line_style = [(1, 0), (5, 5), (1, 1)][i]
+            dashes[f'J ({label_prefix}{legend_val_label})'] = line_style
+            dashes[f'KP ({label_prefix}{legend_val_label})'] = line_style
+            
+            hue_order.append(f'J ({label_prefix}{legend_val_label})')
+            hue_order.append(f'KP ({label_prefix}{legend_val_label})')
+        
+        hue_order = [label for label in hue_order if label.startswith('J')] + \
+                    [label for label in hue_order if label.startswith('KP')]
+        
+        sns.lineplot(
+            data = filtered_data_melted,
+            x = x_var, 
+            y = 'rejection_rate', 
+            hue = 'legend_label',
+            style = 'legend_label',
+            palette = palette,
+            dashes = dashes,
+            hue_order = hue_order,
+            linewidth = 0.8
+        )
+        
+        plt.axhline(y=0.05, color='gray', linestyle='-', linewidth=0.5)
+        plt.xlabel(x_label)
+        plt.ylabel('Rejection Frequency')
+        
+        # Y-axis limits
+        y_lim = (0, 1) if simulation_type == 'power' else (0, 0.5)
+        plt.ylim(y_lim)
+        plt.xlim(x_lim)
+        
+        # Legend position: upper center for power, upper right otherwise
+        legend_loc = 'upper right' if simulation_type == 'mu2_varying' else 'upper center'
+        plt.legend(
+            loc=legend_loc, 
+            frameon=True, 
+            edgecolor='gray', 
+            fancybox=False,
+            prop={'size': 4.5},     
+            handlelength=1.5,          
+            handletextpad=0.5,         
+            labelspacing=0.3,          
+            borderpad=0.3,             
+            markerscale=0.7            
+        )        
+        # Tighter layout
+        plt.tight_layout()
+        
+        fig_outer_value = int(outer_value * 100) if outer_var != 'mu2' else outer_value
+        fig_path = os.path.join(
+            SIMULATIONS_FOLDER,
+            OUTPUT_DIR, 
+            f'exp{experiment}_kz{kz}_{outer_var}{fig_outer_value}_{simulation_type}.pdf'
+        )
         
         plt.savefig(fig_path, format='pdf', bbox_inches='tight')
         print(f"Saved: {fig_path}")
