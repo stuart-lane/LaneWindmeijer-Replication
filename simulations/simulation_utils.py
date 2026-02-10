@@ -21,23 +21,26 @@ from config import *
 ### DATA GENERATING PROCESS, ESTIMATOR, METRICS ETC. FUNCTIONS
 ### ==============================================================================
 
-def get_pi_vector(alpha, mu2, k_z, n, experiment=1):
-    """Compute pi vector for heteroskedastic designs"""
+def get_pi_vector(
+        experiment: int,
+        n: int,
+        kz: int,
+        alpha: float, 
+        mu2
+    ) -> np.ndarray:
+    """Compute Pi vector"""
     
     if experiment == 1:
         m1 = 2**alpha * gamma(alpha + 0.5) / np.sqrt(np.pi)
         m2 = 2**(alpha + 1) * gamma(alpha + 1.5) / np.sqrt(np.pi)
-        omega_trace = m2 + (k_z - 1) * m1
+        omega_trace = m2 + (kz - 1) * m1
         
     elif experiment == 2:
-        omega_trace = k_z * (1 + alpha**2) * np.exp(alpha**2 * k_z / 2)
-        
-    else:
-        raise ValueError("experiment must be 1 or 2")
+        omega_trace = kz * (1 + alpha**2) * np.exp(alpha**2 * kz / 2)
     
-    c = np.sqrt(mu2 * omega_trace / (n * k_z**2))
+    c = np.sqrt(mu2 * omega_trace / (n * kz**2))
     
-    Pi_vector = (c * np.ones(k_z)).reshape(-1, 1)
+    Pi_vector = (c * np.ones(kz)).reshape(-1, 1)
     
     return Pi_vector
 
@@ -152,7 +155,7 @@ def run_simulations_for_params(
     """Run all simulations for a given parameter combination"""
     degs_of_freedom = kz - kx
     sigma_uv = np.array([[1, rho], [rho, 1]])
-    Pi_vector = get_pi_vector(alpha, mu2, kz, n, experiment)
+    Pi_vector = get_pi_vector(experiment, n, kz, alpha, mu2)
     
     # Parallel simulation runs
     results = Parallel(n_jobs=-1)(
@@ -445,12 +448,12 @@ def generate_figures(
             frameon=True, 
             edgecolor='gray', 
             fancybox=False,
-            prop={'size': 4.5},        # Font size
-            handlelength=1.5,          # Length of line samples
-            handletextpad=0.5,         # Space between line and text
-            labelspacing=0.3,          # Vertical space between entries
-            borderpad=0.3,             # Padding inside legend box
-            markerscale=0.7            # Size of line markers
+            prop={'size': 4.5},     
+            handlelength=1.5,          
+            handletextpad=0.5,         
+            labelspacing=0.3,          
+            borderpad=0.3,             
+            markerscale=0.7            
         )        
         # Tighter layout
         plt.tight_layout()
@@ -466,7 +469,7 @@ def generate_figures(
     print("\nAll figures generated!")
 
 ### ==============================================================================
-### COMPUATIONAL RESOURCE INFORMATION
+### COMPUATIONAL RESOURCE INFORMATION/TIMING REPORTS
 ### ==============================================================================
 
 # Try to import psutil for detailed system info (optional)
