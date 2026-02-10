@@ -1,21 +1,18 @@
-REPLICATION PACKAGE FOR: 
+# REPLICATION PACKAGE FOR: 
 
-  Overidentification testing with weak instruments and heteroskedasticity
+Overidentification testing with weak instruments and heteroskedasticity
 
-  Stuart Lane (University of Bristol) & Frank Windmeijer (University of Oxford)
+Authors: Stuart Lane (University of Bristol) & Frank Windmeijer (University of Oxford)
 
-  ArXiv preprint arXiv:2509.21096.
+Paper available at: ArXiv preprint arXiv:2509.21096.
 
-================================================================================
-
-Author: Stuart Lane
-Institution: University of Bristol
 Email: stuart.lane@bristol.ac.uk
+
 Date: February 2026
 
 This package contains code to replicate the Monte Carlo simulations and 
 empirical applications in "Overidentification testing with weak instruments
-and heteroskedasticity"
+and heteroskedasticity". 
 
 ## QUICK START
 
